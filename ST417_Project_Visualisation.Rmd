@@ -1,0 +1,503 @@
+---
+title: "ST417 Project Visualisation"
+author: "Oisín Hodgins"
+date: "12/21/2020"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, comment = NA, fig.width = 9, fig.height = 6)
+knitr::opts_knit$set(root.dir = normalizePath("./data"))
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(flextable)
+```
+
+```{r functions, include=FALSE, warning=FALSE}
+# Define specific function to read in the mobility data
+read_csv_mobility <- function(filename){
+  core_data <<- readr::read_csv(
+    file = filename,
+    col_types = readr::cols(
+      sub_region_1 = readr::col_character(),
+      date = readr::col_date(),
+      retail_and_recreation_percent_change_from_baseline = readr::col_integer(),
+      grocery_and_pharmacy_percent_change_from_baseline = readr::col_integer(),
+      parks_percent_change_from_baseline = readr::col_integer(),
+      transit_stations_percent_change_from_baseline = readr::col_integer(),
+      workplaces_percent_change_from_baseline = readr::col_integer(),
+      residential_percent_change_from_baseline = readr::col_integer(),
+      .default = readr::col_skip()
+    )
+  )%>%
+  tibble::as_tibble(validate = FALSE, .name_repair = "minimal")
+}
+```
+
+```{r data parsing, message=FALSE}
+# Read in the mobility data
+read_csv_mobility("Mobility_Report.csv")
+
+# Filter this data to only include statistics for the entirety of Ireland
+# And rename the columns to be easier to work with
+core_data <- core_data %>% 
+  dplyr::mutate(sub_region_1 = replace_na(sub_region_1, "unknown"))
+core_data <<- core_data %>%
+  dplyr::filter(sub_region_1 == "unknown") %>%
+  dplyr::select(-c(sub_region_1)) %>%
+  mutate(date = as.Date(date,format = "%d/%m/%Y")) %>% # converting dates using the tidyverse package
+  dplyr::rename(retail_and_recreation = retail_and_recreation_percent_change_from_baseline) %>%
+  dplyr::rename(grocery_and_pharmacy = grocery_and_pharmacy_percent_change_from_baseline) %>%
+  dplyr::rename(parks = parks_percent_change_from_baseline) %>%
+  dplyr::rename(transit_stations = transit_stations_percent_change_from_baseline) %>%
+  dplyr::rename(workplaces = workplaces_percent_change_from_baseline) %>%
+  dplyr::rename(residential = residential_percent_change_from_baseline)
+
+# Read in death/case statistics
+case_data <- read_excel("COVID-19-geographic-disbtribution-worldwide-2020-12-14 (1).xlsx")
+
+# Filter out any unneccesary rows & columns
+case_data <- case_data %>%
+  mutate(date = as.Date(dateRep,format = "%d/%m/%Y")) %>%
+  select(date, cases, deaths, countriesAndTerritories) %>%
+  filter(countriesAndTerritories == "Ireland")
+
+# Use a left join to combine the two datasets, and replace any n/a values accordingly
+core_data <- core_data %>%
+  left_join(case_data) %>%
+  select(-c(countriesAndTerritories)) %>%
+  mutate(cases = replace_na(cases, 0)) %>%
+  mutate(deaths = replace_na(deaths, 0))
+
+# Select data for first lockdown
+first_lockdown_data <- core_data %>%
+    subset(date>="2020/03/17"& date<="2020/05/18")
+
+# Select data for second lockdown
+second_lockdown_data <- core_data %>%
+    subset(date>="2020/10/21"& date<="2020/12/01")
+
+# Create a table to view data easily
+# Repeat for first and second lockdowns
+mobility_summary <- tibble(category =
+                        c("Retail & Recreation",
+                        "Grocery & Pharmacy",
+                        "Parks","Transit Stations","Workplaces","Residential"),
+                        change =
+                             c(round(mean(core_data$retail_and_recreation), 2),
+                               round(mean(core_data$grocery_and_pharmacy), 2),
+                               round(mean(core_data$parks), 2),
+                               round(mean(core_data$transit_stations), 2),
+                               round(mean(core_data$workplaces), 2),
+                               round(mean(core_data$residential), 2)),
+                        sd = 
+                          c(signif(sd(core_data$retail_and_recreation), 2),
+                               signif(sd(core_data$grocery_and_pharmacy), 2),
+                               signif(sd(core_data$parks), 2),
+                               signif(sd(core_data$transit_stations), 2),
+                               signif(sd(core_data$workplaces), 2),
+                               signif(sd(core_data$residential), 2)))
+
+mobility_summary_first_lockdown <- tibble(category =
+                        c("Retail & Recreation",
+                        "Grocery & Pharmacy",
+                        "Parks","Transit Stations","Workplaces","Residential"),
+                        change =
+                             c(round(mean(first_lockdown_data$retail_and_recreation), 2),
+                               round(mean(first_lockdown_data$grocery_and_pharmacy), 2),
+                               round(mean(first_lockdown_data$parks), 2),
+                               round(mean(first_lockdown_data$transit_stations), 2),
+                               round(mean(first_lockdown_data$workplaces), 2),
+                               round(mean(first_lockdown_data$residential), 2)),
+                        sd = 
+                          c(signif(sd(first_lockdown_data$retail_and_recreation), 2),
+                               signif(sd(first_lockdown_data$grocery_and_pharmacy), 2),
+                               signif(sd(first_lockdown_data$parks), 2),
+                               signif(sd(first_lockdown_data$transit_stations), 2),
+                               signif(sd(first_lockdown_data$workplaces), 2),
+                               signif(sd(first_lockdown_data$residential), 2)))
+
+mobility_summary_second_lockdown <- tibble(category =
+                        c("Retail & Recreation",
+                        "Grocery & Pharmacy",
+                        "Parks","Transit Stations","Workplaces","Residential"),
+                        change =
+                             c(round(mean(second_lockdown_data$retail_and_recreation), 2),
+                               round(mean(second_lockdown_data$grocery_and_pharmacy), 2),
+                               round(mean(second_lockdown_data$parks), 2),
+                               round(mean(second_lockdown_data$transit_stations), 2),
+                               round(mean(second_lockdown_data$workplaces), 2),
+                               round(mean(second_lockdown_data$residential), 2)),
+                        sd = c(signif(sd(second_lockdown_data$retail_and_recreation), 2),
+                               signif(sd(second_lockdown_data$grocery_and_pharmacy), 2),
+                               signif(sd(second_lockdown_data$parks), 2),
+                               signif(sd(second_lockdown_data$transit_stations), 2),
+                               signif(sd(second_lockdown_data$workplaces), 2),
+                               signif(sd(second_lockdown_data$residential), 2)))
+
+```
+
+```{r overall plots}
+# Six plots here, one for each category.
+# & Bar plot for deaths by day
+cat("----------------Overall Summary----------------\n",
+    "First we will have a look at the data overall.\n",
+    "\n")
+
+cat("A simple barchart shows us the distribution of COVID-19 attributed deaths throughout the entire pandemic.\n",
+    "We can also see the duration of the first and second lockdowns, coinciding with a relative increase in the effects of the virus.\n")
+ggplot(core_data, aes(x=date, y=deaths)) +
+  geom_bar(stat = 'identity') +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=90) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=90) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded Deaths from COVID-19 in Ireland, each day", 
+       x = "Date", y = "Number of Deaths") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(0,100)) 
+cat("This is a qualitative count variable, binomially distributed with two key density regions. The first region has a higher density than the second.\n",
+    "There is a period of relative downtime during the summer months, with much fewer deaths.\n",
+    "There is an outlier value on the 26th April here, not fully visible on the plot. There was a backlog of deaths to be reported that day, which resulted in the comparitevly high count of 234.\n",
+    "There is another outlier on the 3rd October, where negative 5 deaths are recorded, this is due to a past overcounting of deaths.\n")
+
+cat("Here we see a density plot for each of the categories of the mobility data, throughout the entire pandemic.\n",
+    "These plots indicate the change in visits to certain areas, corresponding with each category.\n")
+
+ggplot(core_data, aes(x=date, y=retail_and_recreation)) +
+  geom_density(stat = 'identity', fill="#E69F00") +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded change in visits to Retail/Recreation Areas", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Initially visits to retail and recreational areas were uneffected by the pandemic, however soon the government regulations accompanying the first lockdown forced many non-essential businesses to close, and we can see this effect in the plot.\n",
+    "There is a notable increase in visits to these areas during the summer months, likely caused by a decrease in death/case numbers and the pleasant summer weather.\n",
+    "Following this brief increase we are met with the second wave and second lockdown, bringing with it another decrease.\n")
+
+ggplot(core_data, aes(x=date, y=grocery_and_pharmacy)) +
+  geom_density(stat = 'identity', fill="#9999CC") +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded change in visits to Grocery Shops and Pharmacies", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Here we can see the mobility data for Grocery shops and Pharmacies.\n",
+    "There is a noticible spike immediately before the first lockdown, likely due to a 'panic' among the general populus that such facilities may not be available during the lockdown.\n",
+    "This plot shows that visits to these locations were reasonably consistent throughout the year, and close the baseline value, except for a sharp decrease during both of the lockdowns.\n")
+
+ggplot(core_data, aes(x=date, y=parks)) +
+  geom_density(stat = 'identity', fill="pink") +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=140) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=140) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded change in visits to Parks", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,160))
+cat("Next we have the mobility data for parks.\n",
+    "Similiar to retail and recreational areas we can see a sharp increase during the summer months, likely for the same reasons as before. Notice here that the value is considerably higher than the baseline value, likely due to the fact that the baseline was calculated in January when the weather was not particulary pleasant.\n",
+    "There is a comparitively minor decrease in visits to parks during the lockdowns, this may be attributed to the fact that regulations did not prohibit individuals from visiting this locations in any major way, and for many people going to parks was one of the few activities to be done during lockdowns.\n")
+
+ggplot(core_data, aes(x=date, y=transit_stations)) +
+  geom_density(stat = 'identity', fill="#CC79A7") +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded change in visits to Transit Stations", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Similiar trends as before can be seen in this category; transit stations.\n",
+    "Throughout the year visits to such stations never climbed back to the baseline value after the first lockdown, and we can see two sharp decreases during both lockdowns.\n",
+    "This fact can likely be contributed to the reduced capacity of trains/buses and planes throughout the entire pandemic.\n")
+
+ggplot(core_data, aes(x=date, y=workplaces)) +
+  geom_density(stat = 'identity', fill="#56B4E9") +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded change in visits to Workplaces", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Here we can see the mobility data for workplaces, which is lower than the baseline for value for almost all of the pandemic.\n",
+    "There are two notable decreases during both lockdowns, and a general decrease every weekend throughout the year.\n",
+    "The overall trend can likely be attributed the government restrictions which forced many businesses to close during the lockdowns, and many non-essential workers to work from home when possible.\n")
+
+ggplot(core_data, aes(x=date, y=residential)) +
+  geom_density(stat = 'identity', fill="#009E73") +
+  geom_vline(xintercept = first_lockdown_data$date[1], linetype = "dotted", color = "red", size=0.75) +
+  geom_label(label="First Lockdown", x=first_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = first_lockdown_data$date[length(first_lockdown_data$date)], linetype = "dotted", color = "red", size=0.75) +
+  geom_vline(xintercept = second_lockdown_data$date[1], linetype = "dotted", color = "blue", size=0.75) +
+  geom_label(label="Second Lockdown", x=second_lockdown_data$date[1], y=40) +
+  geom_vline(xintercept = second_lockdown_data$date[length(second_lockdown_data$date)], linetype = "dotted", color = "blue", size=0.75) +
+  labs(title = "Recorded change in visits to Residential Areas", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-25,50))
+cat("Finally we have the residential data, which is almost a reversed graph of the mobility data for workplaces.\n",
+    "The value is higher than the baseline for almost the entirety of the year, with notable increases during both lockdowns.\n",
+    "This can likely be attributed to the same factors as the workplace mobility data; a general closure of business and many non-essential workers operating from home.\n")
+
+cat("Overall Summary Statistics\n", 
+    "\nMean number of deaths: ", 
+    round(mean(core_data$deaths), 2),
+    "\nStandard Deviation of deaths: ", 
+    round(sd(core_data$deaths), 2),
+    "\n")
+
+cat("Mean change from baseline and standard deviation for each mobility category\n")
+overall_tb <- flextable(mobility_summary)
+overall_tb <- theme_vanilla(overall_tb)
+overall_tb <- set_header_labels(overall_tb, category = "Category", 
+    change = "Mean % Change from Baseline", sd = "Standard Deviation")
+overall_tb <- colformat_double(x = overall_tb, j = ~ change, digits = 2)
+overall_tb <- autofit(overall_tb)
+overall_tb <- color(overall_tb, i = ~ change < 0, 
+        j = ~ change, 
+        color="red")
+overall_tb <- color(overall_tb, i = ~ change > 0, 
+        j = ~ change, 
+        color="#71CA97")
+overall_tb
+cat("This table shows us the mean/average change in visits compared to the baseline value for each category.\n",
+    "Grocery & pharmacy, parks and residential areas all had a positive mean value, whereas the other categories had a negative value.\n",
+    "Transit Stations appear to be the 'hardest hit' by the pandemic, with the largest mean decrease.\n",
+    "The least consistent trends have the highest standard deviation, and we can see park areas have the highest standard deviation.\n",
+    "Conversely grocery & pharmacy and residential have much lower standard deviations, as their graphs are more consistent.\n")
+```
+
+```{r first lockdown plots}
+cat("----------------First Lockdown Summary----------------\n",
+    "The first lockdown took place between the 17th March 2019, and the 18th May 2019.\n",
+    "Here we have closer view of this subset of the data, corresponding with the outlines regions in the plots above.\n",
+    "Once again a simple barchart shows us the distribution of COVID-19 attributed deaths throughout this lockdown.\n", 
+    "Also, we can see the change for each of the categories of the mobility data throughout the entire pandemic.\n",
+    "\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=deaths)) +
+  geom_bar(stat = 'identity') +
+  labs(title = "Recorded Deaths from COVID-19 in first Irish Lockdown", 
+       x = "Date", y = "Number of Deaths") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(0,100))
+
+cat("Here we can see the death count is initially low, and climbs to a peak in the center of the lockdown before lowering again\n",
+    "We see again the outlier value of 234 on the 26th April here.\n")
+
+cat("Here we see a density plot for each of the categories of the mobility data, throughout the first lockdown.\n",
+    "These plots indicate the change in visits to certain areas, corresponding with each category.\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=retail_and_recreation)) +
+  geom_density(stat = 'identity', fill="#E69F00") +
+  labs(title = "Recorded change in visits to Retail/Recreation Areas, First Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Visits to retail and recreational areas remained relatively uniform throughout the first lockdown, we can see the value observed was mostly in the [-50%,-75%] range.\n",
+    "There is a notable decrease in visits visible in the centre of plot.\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=grocery_and_pharmacy)) +
+  geom_density(stat = 'identity', fill="#9999CC") +
+  labs(title = "Recorded change in visits to Grocery Shops and Pharmacies, First Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Here we can see the mobility data for grocery shops and pharmacies.\n",
+    "This plot shows that visits to these locations were reasonably consistent throughout the lockdown, mostly in the range of [0,-25]\n",
+    "There is a noticible sharp decrease around the 12th of April.\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=parks)) +
+  geom_density(stat = 'identity', fill="pink") +
+  labs(title = "Recorded change in visits to Parks, First Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,160))
+cat("Next we have the mobility data for parks.\n",
+    "The plot fluctuates wildy throughout the lockdown, with high peaks and low troughs, overall however there is a mean decrease.\n",
+    "These comparitavely high fluctuations may corresond with weather/weekends, when conditions are pleasant many people head to these areas.\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=transit_stations)) +
+  geom_density(stat = 'identity', fill="#CC79A7") +
+  labs(title = "Recorded change in visits to Transit Stations, First Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Similiar trends to the retail and recreational data can be seen in this category; transit stations.\n",
+    "Throughout the first lockdown the decrease in visits to stations remained relatively constant, in the [-50%,-75%] range.\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=workplaces)) +
+  geom_density(stat = 'identity', fill="#56B4E9") +
+  labs(title = "Recorded change in visits to Workplaces, First Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Here we can see the mobility data for workplaces, which exhibits a similiar trend to the overall data for this category.\n",
+    "We can see a regular decrease in visits to these areas on weekends, reflective of the typical 5 day work week.\n",
+    "This value is mianly distributed in the [-50%,-75%] range, similiar to transit stations and retail and recreational data.\n")
+
+ggplot(first_lockdown_data, aes(x=date, y=residential)) +
+  geom_density(stat = 'identity', fill="#009E73") +
+  labs(title = "Recorded change in visits to Residential Areas, First Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-25,50))
+cat("Lastly we have the residential data, which is once again almost a reversed graph of the mobility data for workplaces.\n",
+    "The value is higher than the baseline for the entirety of the first lockdown, mostly in the [15%,30%] range.\n")
+
+cat("Summary Statistics for first lockdown\n", 
+    "\nMean number of deaths: ", 
+    round(mean(first_lockdown_data$deaths), 2),
+    "\nStandard Deviation of deaths: ", 
+    round(sd(first_lockdown_data$deaths), 2),
+    "\n")
+cat("This value is considerably higher the corresponding overall value, indicitave of the severity of the pandemic during this time of the year.\n")
+
+cat("Mean change from baseline and standard deviation for each mobility category\n")
+first_lockdown_tb <- flextable(mobility_summary_first_lockdown)
+first_lockdown_tb <- theme_vanilla(first_lockdown_tb)
+first_lockdown_tb <- set_header_labels(first_lockdown_tb, category = "Category", 
+    change = "Mean % Change from Baseline", sd = "Standard Deviation")
+first_lockdown_tb <- colformat_double(x = first_lockdown_tb, j = ~ change, digits = 2)
+first_lockdown_tb <- autofit(first_lockdown_tb)
+first_lockdown_tb <- color(first_lockdown_tb, i = ~ change < 0, 
+        j = ~ change, 
+        color="red")
+first_lockdown_tb <- color(first_lockdown_tb, i = ~ change > 0, 
+        j = ~ change, 
+        color="#71CA97")
+first_lockdown_tb
+
+
+cat("The only category with a mean positive change is residential, which is no suprise with so many non-essential workers operating from home.\n",
+    "Here Retail and Recreation is hit the hardest, followed by transit stations and workplaces.\n",
+    "\n")
+```
+
+```{r second lockdown plots}
+cat("----------------Second Lockdown Summary----------------\n",
+    "The first lockdown took place between the 21st October 2019, and the 1st December 2019.\n",
+    "Once again a simple barchart shows us the distribution of COVID-19 attributed deaths throughout this lockdown.\n", 
+    "Also, we can see the change for each of the categories of the mobility data throughout the entire pandemic.\n",
+    "\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=deaths)) +
+  geom_bar(stat = 'identity') +
+  labs(title = "Recorded Deaths from COVID-19 in second Irish Lockdown", 
+       x = "Date", y = "Number of Deaths") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(0,50))
+cat("Here the range of the death count is considerably lower than the first lockdown, with no values greater than 20.\n",
+    "Unlike the first lockdown there is no obvious bell shape or general peak here, the death counts appear reasonably constant throughout the second lockdown.\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=retail_and_recreation)) +
+  geom_density(stat = 'identity', fill="#E69F00") +
+  labs(title = "Recorded change in visits to Retail/Recreation Areas, Second Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Visits to retail and recreational areas remained relatively uniform throughout the second lockdown, we can see the value observed lies mostly around -50%.\n",
+    "It appears to be quite similiar to plot for the first lockdown, only with slighly less extreme values.\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=grocery_and_pharmacy)) +
+  geom_density(stat = 'identity', fill="#9999CC") +
+  labs(title = "Recorded change in visits to Grocery Shops and Pharmacies, Second Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-50,50))
+cat("Here we can see the mobility data for grocery shops and pharmacies.\n",
+    "This plot shows that visits to these locations were reasonably consistent and conservative throughout the second lockdown, with relatively low peaks and throughs all lying in the [-25%,25%] range.\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=parks)) +
+  geom_density(stat = 'identity', fill="pink") +
+  labs(title = "Recorded change in visits to Parks, Second Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-75,75))
+cat("Next we have the mobility data for parks.\n",
+    "The plot fluctuates wildy throughout the second lockdown, with high peaks and low troughs, similiar to the first lockdown and overall plots for this category.\n",
+    "Unlike the first lockdown there appears to be no mean decrease in this plot, in other words there is a similiar area/density above and below the x-axis.\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=transit_stations)) +
+  geom_density(stat = 'identity', fill="#CC79A7") +
+  labs(title = "Recorded change in visits to Transit Stations, Second Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Next we have the mobility data for transit stations.\n",
+    "This plot is similiar to the corresponding first lockdown plot, with a relatively constant decrease in the range of [-50%,-75%].\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=workplaces)) +
+  geom_density(stat = 'identity', fill="#56B4E9") +
+  labs(title = "Recorded change in visits to Workplaces, Second Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-90,50))
+cat("Here we can see the mobility data for workplaces, which exhibits a similiar trend to the first lockdown and the overall data for this category.\n",
+    "We can see a regular decrease in visits to these areas on weekends, reflective of the typical 5 day work week.\n",
+    "This value is mianly distributed in the [-50%,-75%] range, similiar to transit stations and retail and recreational data.\n")
+
+ggplot(second_lockdown_data, aes(x=date, y=residential)) +
+  geom_density(stat = 'identity', fill="#009E73") +
+  labs(title = "Recorded change in visits to Residential Areas, Second Lockdown", 
+       x = "Date", y = "Change from Baseline") +
+  theme(plot.title = element_text(face="bold")) +
+  coord_cartesian(ylim=c(-25,50))
+cat("Lastly we have the residential data, which is once again almost a reversed graph of the mobility data for workplaces.\n",
+    "The value is higher than the baseline for the entirety of the second lockdown, mostly in the [15%,30%] range.\n")
+
+cat("Summary Statistics for second lockdown\n", 
+    "\nMean number of deaths: ", 
+    round(mean(second_lockdown_data$deaths), 2),
+    "\nStandard Deviation of deaths: ", 
+    round(sd(second_lockdown_data$deaths), 2),
+    "\n")
+cat("This value is considerably lower than that of the first lockdown, and the corresponding overall value.\n")
+
+cat("Mean change from baseline and standard deviation for each mobility category\n")
+second_lockdown_tb <- flextable(mobility_summary_second_lockdown)
+second_lockdown_tb <- theme_vanilla(second_lockdown_tb)
+second_lockdown_tb <- set_header_labels(second_lockdown_tb, category = "Category", 
+    change = "Mean % Change from Baseline", sd = "Standard Deviation")
+second_lockdown_tb <- colformat_double(x = second_lockdown_tb, j = ~ change, digits = 2)
+second_lockdown_tb <- autofit(second_lockdown_tb)
+second_lockdown_tb <- color(second_lockdown_tb, i = ~ change < 0, 
+        j = ~ change, 
+        color="red")
+second_lockdown_tb <- color(second_lockdown_tb, i = ~ change > 0, 
+        j = ~ change, 
+        color="#71CA97")
+second_lockdown_tb
+
+cat("Once again the 'hardest hit' categories are transit stations and retail and recreational.\n",
+    "Parks show a roughly equal value to the baseline, along with grocery and pharmacy, however parks still have a high standard deviation\n",
+    "\n")
+```
+
